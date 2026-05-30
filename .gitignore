@@ -16,6 +16,10 @@ uv.lock
 models/
 *.bin
 *.pt
+*.onnx
+
+# Piper binary (downloaded at setup, not committed)
+piper/piper/
 
 # Test artifacts
 .pytest_cache/
