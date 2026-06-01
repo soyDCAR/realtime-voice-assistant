@@ -5,6 +5,9 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import structlog
+from dotenv import load_dotenv
+
+load_dotenv()
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles

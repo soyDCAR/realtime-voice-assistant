@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Asistente de Voz</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0f0f0f;
+      color: #e8e8e8;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2rem;
+      padding: 2rem;
+    }
+
+    h1 {
+      font-size: 1.4rem;
+      font-weight: 500;
+      letter-spacing: 0.05em;
+      color: #a0a0a0;
+    }
+
+    /* ── Conversation log ── */
+    #log {
+      width: 100%;
+      max-width: 540px;
+      height: 320px;
+      overflow-y: auto;
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 12px;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      scroll-behavior: smooth;
+    }
+
+    .msg {
+      padding: 0.55rem 0.9rem;
+      border-radius: 8px;
+      max-width: 85%;
+      font-size: 0.95rem;
+      line-height: 1.4;
+    }
+    .msg.user {
+      align-self: flex-end;
+      background: #1d4ed8;
+      color: #fff;
+    }
+    .msg.assistant {
+      align-self: flex-start;
+      background: #262626;
+      color: #e8e8e8;
+    }
+    .msg.system {
+      align-self: center;
+      background: transparent;
+      color: #555;
+      font-size: 0.8rem;
+      font-style: italic;
+    }
+
+    /* ── Push-to-talk button ── */
+    #btn {
+      width: 88px;
+      height: 88px;
+      border-radius: 50%;
+      border: none;
+      background: #1d4ed8;
+      color: #fff;
+      font-size: 2rem;
+      cursor: pointer;
+      transition: transform 0.1s, background 0.15s, box-shadow 0.15s;
+      box-shadow: 0 0 0 0 rgba(29, 78, 216, 0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    #btn:hover  { background: #2563eb; }
+    #btn.recording {
+      background: #dc2626;
+      transform: scale(1.08);
+      box-shadow: 0 0 0 10px rgba(220, 38, 38, 0.25);
+      animation: pulse 1.2s infinite;
+    }
+    #btn.processing { background: #6b7280; cursor: not-allowed; }
+    #btn.speaking   { background: #059669; cursor: not-allowed; }
+
+    @keyframes pulse {
+      0%   { box-shadow: 0 0 0 0   rgba(220, 38, 38, 0.4); }
+      70%  { box-shadow: 0 0 0 14px rgba(220, 38, 38, 0);   }
+      100% { box-shadow: 0 0 0 0   rgba(220, 38, 38, 0);    }
+    }
+
+    /* ── Status line ── */
+    #status {
+      font-size: 0.85rem;
+      color: #555;
+      height: 1.2em;
+      transition: color 0.2s;
+    }
+    #status.active { color: #a0a0a0; }
+
+    /* ── Latency badge ── */
+    #latency {
+      font-size: 0.75rem;
+      color: #3a3a3a;
+      font-variant-numeric: tabular-nums;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎙 Asistente de Voz</h1>
+
+  <div id="log">
+    <span class="msg system">Mantén presionado el botón para hablar.</span>
+  </div>
+
+  <button id="btn" title="Mantén presionado para hablar">🎤</button>
+
+  <p id="status">Conectando…</p>
+  <p id="latency"></p>
+
+  <script>
+    // ── DOM refs ────────────────────────────────────────────────────────────
+    const btn      = document.getElementById('btn');
+    const log      = document.getElementById('log');
+    const statusEl = document.getElementById('status');
+    const latEl    = document.getElementById('latency');
+
+    // ── WebSocket ───────────────────────────────────────────────────────────
+    const WS_URL = `ws://${location.host}/ws`;
+    let ws = null;
+
+    function connectWS() {
+      ws = new WebSocket(WS_URL);
+      ws.binaryType = 'arraybuffer';   // receive binary as ArrayBuffer, not Blob
+
+      ws.onopen = () => {
+        setStatus('Listo', false);
+        btn.disabled = false;
+      };
+
+      ws.onclose = () => {
+        setStatus('Desconectado — reconectando…', true);
+        btn.disabled = true;
+        setTimeout(connectWS, 2000);
+      };
+
+      ws.onerror = () => ws.close();
+
+      ws.onmessage = async (event) => {
+        // Server sends either WAV bytes or an empty string (silent input)
+        if (typeof event.data === 'string') {
+          // Empty transcript — server found only silence
+          setStatus('No se detectó voz', true);
+          setBtnState('idle');
+          return;
+        }
+
+        // Play WAV response
+        setBtnState('speaking');
+        setStatus('Hablando…', true);
+
+        const t0 = performance.now();
+        try {
+          await playAudio(event.data);
+        } finally {
+          const elapsed = Math.round(performance.now() - t0);
+          latEl.textContent = `🔊 reproducción: ${elapsed} ms`;
+          setBtnState('idle');
+          setStatus('Listo', false);
+        }
+      };
+    }
+
+    // ── MediaRecorder ───────────────────────────────────────────────────────
+    let mediaRecorder = null;
+    let audioChunks   = [];
+    let tStart        = null;  // timestamp when user pressed button
+
+    async function initMic() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) audioChunks.push(e.data);
+        };
+
+        mediaRecorder.onstop = () => {
+          const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
+          audioChunks = [];
+
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            tStart = performance.now();
+            ws.send(blob);
+            setBtnState('processing');
+            setStatus('Procesando…', true);
+          }
+        };
+
+      } catch (err) {
+        setStatus('Micrófono no disponible: ' + err.message, true);
+        btn.disabled = true;
+      }
+    }
+
+    // ── Push-to-talk events ─────────────────────────────────────────────────
+    function startRecording() {
+      if (!mediaRecorder || btnState !== 'idle') return;
+      audioChunks = [];
+      mediaRecorder.start();
+      setBtnState('recording');
+      setStatus('Grabando…', true);
+    }
+
+    function stopRecording() {
+      if (!mediaRecorder || btnState !== 'recording') return;
+      mediaRecorder.stop();   // triggers onstop
+    }
+
+    // Mouse
+    btn.addEventListener('mousedown', startRecording);
+    btn.addEventListener('mouseup',   stopRecording);
+    btn.addEventListener('mouseleave', stopRecording);
+
+    // Touch (mobile)
+    btn.addEventListener('touchstart', (e) => { e.preventDefault(); startRecording(); });
+    btn.addEventListener('touchend',   (e) => { e.preventDefault(); stopRecording();  });
+
+    // Keyboard: Space bar
+    document.addEventListener('keydown', (e) => {
+      if (e.code === 'Space' && !e.repeat) { e.preventDefault(); startRecording(); }
+    });
+    document.addEventListener('keyup', (e) => {
+      if (e.code === 'Space') { e.preventDefault(); stopRecording(); }
+    });
+
+    // ── WebAudio playback ───────────────────────────────────────────────────
+    let audioCtx = null;
+
+    function getAudioContext() {
+      // AudioContext must be created (or resumed) after a user gesture
+      if (!audioCtx) audioCtx = new AudioContext();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      return audioCtx;
+    }
+
+    function playAudio(arrayBuffer) {
+      return new Promise((resolve, reject) => {
+        const ctx = getAudioContext();
+
+        ctx.decodeAudioData(
+          arrayBuffer,
+          (audioBuffer) => {
+            const source = ctx.createBufferSource();
+            source.buffer = audioBuffer;
+            source.connect(ctx.destination);
+            source.onended = resolve;
+            source.start();
+
+            // Append assistant message to log
+            const duration = Math.round(audioBuffer.duration * 1000);
+            addMessage('assistant', `🔊 respuesta de audio (${duration} ms)`);
+          },
+          reject
+        );
+      });
+    }
+
+    // ── UI helpers ──────────────────────────────────────────────────────────
+    let btnState = 'idle';   // idle | recording | processing | speaking
+
+    function setBtnState(state) {
+      btnState = state;
+      btn.className = state === 'idle' ? '' : state;
+      btn.disabled  = state === 'processing' || state === 'speaking';
+      const icons = { idle: '🎤', recording: '⏹', processing: '⏳', speaking: '🔊' };
+      btn.textContent = icons[state] ?? '🎤';
+    }
+
+    function setStatus(text, active) {
+      statusEl.textContent = text;
+      statusEl.className   = active ? 'active' : '';
+    }
+
+    function addMessage(role, text) {
+      const div = document.createElement('div');
+      div.className = `msg ${role}`;
+      div.textContent = text;
+      log.appendChild(div);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    // ── Boot ────────────────────────────────────────────────────────────────
+    btn.disabled = true;
+    initMic().then(connectWS);
+  </script>
+</body>
+</html>
