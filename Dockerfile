@@ -12,7 +12,7 @@ COPY app/ ./app/
 
 # Install dependencies into an isolated venv (not editable — no symlinks needed)
 RUN uv venv /opt/venv && \
-    uv pip install --python /opt/venv/python . --no-cache
+    uv pip install --python /opt/venv/bin/python . --no-cache
 
 # ── Stage 2: runtime ──────────────────────────────────────────────────────────
 FROM python:3.11-slim AS runtime
