@@ -6,22 +6,25 @@ WORKDIR /app
 # Install uv for fast dependency resolution
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-# Copy project metadata and install dependencies into an isolated venv
+# Copy project files needed to resolve dependencies
 COPY pyproject.toml .
+COPY app/ ./app/
+
+# Install dependencies into an isolated venv (not editable — no symlinks needed)
 RUN uv venv /opt/venv && \
-    uv pip install --python /opt/venv/python -e "." --no-cache
+    uv pip install --python /opt/venv/python . --no-cache
 
 # ── Stage 2: runtime ──────────────────────────────────────────────────────────
 FROM python:3.11-slim AS runtime
 
 WORKDIR /app
 
-# System deps: wget + unzip for Piper download
+# System deps: wget + tar for Piper download
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends wget unzip && \
+    apt-get install -y --no-install-recommends wget tar && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy venv from builder
+# Copy venv from builder (includes all Python deps)
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
@@ -29,17 +32,18 @@ ENV PATH="/opt/venv/bin:$PATH"
 RUN wget -q https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz \
     -O /tmp/piper.tar.gz && \
     mkdir -p /app/piper/piper && \
-    tar -xzf /tmp/piper.tar.gz -C /app/piper/piper --strip-components=1 && \
-    rm /tmp/piper.tar.gz
+    tar -xzf /tmp/piper.tar.gz -C /app/piper/ && \
+    rm /tmp/piper.tar.gz && \
+    ls /app/piper/
 
 # Download Piper Spanish voice model
-RUN wget -q https://huggingface.co/rhasspy/piper-voices/resolve/main/es/es_ES/sharvard/medium/es_ES-sharvard-medium.onnx \
-    -O /app/piper/es_ES-sharvard-medium.onnx && \
-    wget -q https://huggingface.co/rhasspy/piper-voices/resolve/main/es/es_ES/sharvard/medium/es_ES-sharvard-medium.onnx.json \
-    -O /app/piper/es_ES-sharvard-medium.onnx.json
+RUN wget -q "https://huggingface.co/rhasspy/piper-voices/resolve/main/es/es_ES/sharvard/medium/es_ES-sharvard-medium.onnx" \
+        -O /app/piper/es_ES-sharvard-medium.onnx && \
+    wget -q "https://huggingface.co/rhasspy/piper-voices/resolve/main/es/es_ES/sharvard/medium/es_ES-sharvard-medium.onnx.json" \
+        -O /app/piper/es_ES-sharvard-medium.onnx.json
 
-# Copy application code
-COPY app/ ./app/
+# Copy application code and static files
+COPY --from=builder /app/app/ ./app/
 COPY static/ ./static/
 
 # HF Spaces runs as non-root user 1000
