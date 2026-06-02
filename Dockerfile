@@ -1,0 +1,55 @@
+# ── Stage 1: builder ──────────────────────────────────────────────────────────
+FROM python:3.11-slim AS builder
+
+WORKDIR /app
+
+# Install uv for fast dependency resolution
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+# Copy project metadata and install dependencies into an isolated venv
+COPY pyproject.toml .
+RUN uv venv /opt/venv && \
+    uv pip install --python /opt/venv/python -e "." --no-cache
+
+# ── Stage 2: runtime ──────────────────────────────────────────────────────────
+FROM python:3.11-slim AS runtime
+
+WORKDIR /app
+
+# System deps: wget + unzip for Piper download
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends wget unzip && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy venv from builder
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Download Piper Linux binary
+RUN wget -q https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz \
+    -O /tmp/piper.tar.gz && \
+    mkdir -p /app/piper/piper && \
+    tar -xzf /tmp/piper.tar.gz -C /app/piper/piper --strip-components=1 && \
+    rm /tmp/piper.tar.gz
+
+# Download Piper Spanish voice model
+RUN wget -q https://huggingface.co/rhasspy/piper-voices/resolve/main/es/es_ES/sharvard/medium/es_ES-sharvard-medium.onnx \
+    -O /app/piper/es_ES-sharvard-medium.onnx && \
+    wget -q https://huggingface.co/rhasspy/piper-voices/resolve/main/es/es_ES/sharvard/medium/es_ES-sharvard-medium.onnx.json \
+    -O /app/piper/es_ES-sharvard-medium.onnx.json
+
+# Copy application code
+COPY app/ ./app/
+COPY static/ ./static/
+
+# HF Spaces runs as non-root user 1000
+RUN useradd -m -u 1000 appuser && chown -R appuser /app
+USER appuser
+
+ENV WHISPER_MODEL=base
+ENV WHISPER_DEVICE=cpu
+ENV TTS_ENGINE=piper
+
+EXPOSE 7860
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860"]

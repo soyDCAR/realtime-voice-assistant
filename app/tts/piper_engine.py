@@ -1,5 +1,4 @@
 import asyncio
-import os
 import subprocess
 import time
 from pathlib import Path
@@ -11,12 +10,8 @@ from app.tts.base import BaseTTSEngine
 logger = structlog.get_logger(__name__)
 
 _PROJECT_ROOT = Path(__file__).parent.parent.parent
-_DEFAULT_PIPER_BIN = str(
-    _PROJECT_ROOT / "piper" / "piper" / "piper.exe"
-)
-_DEFAULT_MODEL = str(
-    _PROJECT_ROOT / "piper" / "es_ES-sharvard-medium.onnx"
-)
+_DEFAULT_PIPER_BIN = str(_PROJECT_ROOT / "piper" / "piper" / "piper.exe")
+_DEFAULT_MODEL = str(_PROJECT_ROOT / "piper" / "es_ES-sharvard-medium.onnx")
 
 
 class PiperEngine(BaseTTSEngine):
@@ -46,7 +41,8 @@ class PiperEngine(BaseTTSEngine):
         result = subprocess.run(
             [
                 str(self.piper_bin),
-                "--model", str(self.model),
+                "--model",
+                str(self.model),
                 "--output_raw",
             ],
             input=text.encode("utf-8"),
@@ -101,8 +97,8 @@ def _pcm_to_wav(pcm_data: bytes, sample_rate: int = 22050) -> bytes:
         chunk_size,
         b"WAVE",
         b"fmt ",
-        16,             # subchunk1 size
-        1,              # PCM format
+        16,  # subchunk1 size
+        1,  # PCM format
         num_channels,
         sample_rate,
         byte_rate,

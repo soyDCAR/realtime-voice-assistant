@@ -18,9 +18,7 @@ def get_tts_engine() -> BaseTTSEngine:
 
     if engine_name == "piper":
         from app.tts.piper_engine import PiperEngine
+
         return PiperEngine()
 
-    raise ValueError(
-        f"Unknown TTS engine: '{engine_name}'. "
-        f"Supported: 'piper'"
-    )
+    raise ValueError(f"Unknown TTS engine: '{engine_name}'. " f"Supported: 'piper'")

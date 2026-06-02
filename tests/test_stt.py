@@ -1,10 +1,13 @@
-import pytest
 from pathlib import Path
+
+import pytest
 
 from app.stt.engine import Transcriber
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 SAMPLE_WAV = FIXTURES_DIR / "sample.wav"
+
+pytestmark = pytest.mark.slow
 
 
 @pytest.fixture(scope="module")

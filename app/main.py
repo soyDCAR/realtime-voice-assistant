@@ -7,15 +7,16 @@ from pathlib import Path
 import structlog
 from dotenv import load_dotenv
 
-load_dotenv()
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
+load_dotenv()  # must run before app imports that read env vars at module level
 
-from app.llm.client import LLMClient
-from app.llm.conversation import ConversationManager
-from app.stt.engine import Transcriber
-from app.tts.factory import get_tts_engine
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect  # noqa: E402
+from fastapi.responses import FileResponse  # noqa: E402
+from fastapi.staticfiles import StaticFiles  # noqa: E402
+
+from app.llm.client import LLMClient  # noqa: E402
+from app.llm.conversation import ConversationManager  # noqa: E402
+from app.stt.engine import Transcriber  # noqa: E402
+from app.tts.factory import get_tts_engine  # noqa: E402
 
 logger = structlog.get_logger(__name__)
 
@@ -56,6 +57,7 @@ if _STATIC_DIR.exists() and any(_STATIC_DIR.iterdir()):
 
 # ── HTTP routes ───────────────────────────────────────────────────────────────
 
+
 @app.get("/")
 async def index():
     """Serve the frontend."""
@@ -63,6 +65,7 @@ async def index():
 
 
 # ── WebSocket handler ─────────────────────────────────────────────────────────
+
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -117,6 +120,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 async def _run_stt(audio_bytes: bytes) -> str:
     """Write audio to a temp file and transcribe. Runs in a thread pool."""

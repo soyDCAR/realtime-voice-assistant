@@ -2,7 +2,6 @@ import struct
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
 from fastapi.testclient import TestClient
 
 import app.main as main_module
@@ -11,15 +10,29 @@ import app.main as main_module
 
 _FAKE_PCM = b"\x00\x00" * 100
 _data_size = len(_FAKE_PCM)
-_FAKE_WAV = struct.pack(
-    "<4sI4s4sIHHIIHH4sI",
-    b"RIFF", 36 + _data_size, b"WAVE",
-    b"fmt ", 16, 1, 1, 22050, 44100, 2, 16,
-    b"data", _data_size,
-) + _FAKE_PCM
+_FAKE_WAV = (
+    struct.pack(
+        "<4sI4s4sIHHIIHH4sI",
+        b"RIFF",
+        36 + _data_size,
+        b"WAVE",
+        b"fmt ",
+        16,
+        1,
+        1,
+        22050,
+        44100,
+        2,
+        16,
+        b"data",
+        _data_size,
+    )
+    + _FAKE_PCM
+)
 
 
 # ── Mock engines ──────────────────────────────────────────────────────────────
+
 
 def _make_mocks(transcript: str = "Hola, ¿cómo estás?"):
     mock_transcriber = MagicMock()
@@ -35,6 +48,7 @@ def _make_mocks(transcript: str = "Hola, ¿cómo estás?"):
 
 
 # ── Test client factory ───────────────────────────────────────────────────────
+
 
 def _make_client(transcript: str = "Hola, ¿cómo estás?"):
     """
@@ -60,6 +74,7 @@ def _make_client(transcript: str = "Hola, ¿cómo estás?"):
 
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
+
 
 def test_ws_full_pipeline():
     client, mock_transcriber, mock_llm, mock_tts = _make_client()
@@ -102,8 +117,7 @@ def test_ws_pipeline_latency_logged(mocker):
     assert "ws.pipeline_complete" in log_events
 
     pipeline_call = next(
-        c for c in mock_log.call_args_list
-        if c.args[0] == "ws.pipeline_complete"
+        c for c in mock_log.call_args_list if c.args[0] == "ws.pipeline_complete"
     )
     assert "stt_ms" in pipeline_call.kwargs
     assert "llm_ms" in pipeline_call.kwargs

@@ -1,6 +1,3 @@
-import struct
-import subprocess
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -31,12 +28,14 @@ def _make_subprocess_result(returncode: int = 0, stdout: bytes = FAKE_PCM):
 
 # ── BaseTTSEngine tests ────────────────────────────────────────────────────────
 
+
 def test_base_engine_is_abstract():
     with pytest.raises(TypeError):
         BaseTTSEngine()
 
 
 # ── _pcm_to_wav helper ────────────────────────────────────────────────────────
+
 
 def test_pcm_to_wav_header():
     wav = _pcm_to_wav(FAKE_PCM, sample_rate=22050)
@@ -54,6 +53,7 @@ def test_pcm_to_wav_header():
 
 
 # ── PiperEngine tests ─────────────────────────────────────────────────────────
+
 
 def test_synthesize_returns_wav_bytes(mocker):
     engine = _make_mock_engine()

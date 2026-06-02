@@ -1,5 +1,6 @@
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.llm.client import LLMClient
 from app.llm.conversation import ConversationManager
@@ -28,9 +29,7 @@ def mock_anthropic(mocker):
     )
     mocker.patch(
         "app.llm.client.AsyncAnthropic",
-        return_value=MagicMock(
-            messages=MagicMock(create=mock_create)
-        ),
+        return_value=MagicMock(messages=MagicMock(create=mock_create)),
     )
     return mock_create
 
@@ -46,6 +45,7 @@ def conversation(llm_client):
 
 
 # ── LLMClient tests ────────────────────────────────────────────────────────────
+
 
 async def test_complete_returns_text(llm_client, mock_anthropic):
     result = await llm_client.complete([{"role": "user", "content": "Hola"}])
@@ -70,11 +70,14 @@ async def test_complete_logs_latency(llm_client, mock_anthropic, mocker):
     log_calls = [call.args[0] for call in mock_log.call_args_list]
     assert "llm.completed" in log_calls
 
-    completed_call = next(c for c in mock_log.call_args_list if c.args[0] == "llm.completed")
+    completed_call = next(
+        c for c in mock_log.call_args_list if c.args[0] == "llm.completed"
+    )
     assert "latency_ms" in completed_call.kwargs
 
 
 # ── ConversationManager tests ──────────────────────────────────────────────────
+
 
 async def test_chat_returns_response(conversation):
     response = await conversation.chat("Hola")
