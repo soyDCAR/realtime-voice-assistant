@@ -28,13 +28,16 @@ RUN apt-get update && \
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Download Piper Linux binary
+# Download Piper Linux binary.
+# The tar extracts as: piper/piper (binary) + piper/espeak-ng-data/ etc.
+# We extract into /app/piper/ so the binary lands at /app/piper/piper/piper
 RUN wget -q https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz \
     -O /tmp/piper.tar.gz && \
-    mkdir -p /app/piper/piper && \
+    mkdir -p /app/piper && \
     tar -xzf /tmp/piper.tar.gz -C /app/piper/ && \
+    chmod +x /app/piper/piper/piper && \
     rm /tmp/piper.tar.gz && \
-    ls /app/piper/
+    echo "Piper binary check:" && ls -la /app/piper/piper/
 
 # Download Piper Spanish voice model
 RUN wget -q "https://huggingface.co/rhasspy/piper-voices/resolve/main/es/es_ES/sharvard/medium/es_ES-sharvard-medium.onnx" \

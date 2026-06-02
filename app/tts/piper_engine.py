@@ -1,5 +1,6 @@
 import asyncio
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -10,7 +11,8 @@ from app.tts.base import BaseTTSEngine
 logger = structlog.get_logger(__name__)
 
 _PROJECT_ROOT = Path(__file__).parent.parent.parent
-_DEFAULT_PIPER_BIN = str(_PROJECT_ROOT / "piper" / "piper" / "piper.exe")
+_PIPER_BIN_NAME = "piper.exe" if sys.platform == "win32" else "piper"
+_DEFAULT_PIPER_BIN = str(_PROJECT_ROOT / "piper" / "piper" / _PIPER_BIN_NAME)
 _DEFAULT_MODEL = str(_PROJECT_ROOT / "piper" / "es_ES-sharvard-medium.onnx")
 
 
