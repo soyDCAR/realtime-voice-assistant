@@ -26,9 +26,7 @@ class LLMClient:
     ) -> None:
         self.model = model
         self.max_tokens = max_tokens
-        self._client = AsyncGroq(
-            api_key=api_key or os.environ["GROQ_API_KEY"]
-        )
+        self._client = AsyncGroq(api_key=api_key or os.environ["GROQ_API_KEY"])
         logger.info("llm.client_ready", model=model, max_tokens=max_tokens)
 
     async def complete(self, messages: list[dict]) -> str:
