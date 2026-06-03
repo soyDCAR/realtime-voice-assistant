@@ -7,35 +7,40 @@ from app.llm.conversation import ConversationManager
 
 
 def _make_mock_response(text: str) -> MagicMock:
-    """Build a fake Anthropic API response object."""
-    content_block = MagicMock()
-    content_block.text = text
+    """Build a fake Groq API response object."""
+    message = MagicMock()
+    message.content = text
+
+    choice = MagicMock()
+    choice.message = message
 
     usage = MagicMock()
-    usage.input_tokens = 42
-    usage.output_tokens = 12
+    usage.prompt_tokens = 42
+    usage.completion_tokens = 12
 
     response = MagicMock()
-    response.content = [content_block]
+    response.choices = [choice]
     response.usage = usage
     return response
 
 
 @pytest.fixture
-def mock_anthropic(mocker):
-    """Patch AsyncAnthropic so no real HTTP calls are made."""
+def mock_groq(mocker):
+    """Patch AsyncGroq so no real HTTP calls are made."""
     mock_create = AsyncMock(
         return_value=_make_mock_response("Hola, ¿en qué te puedo ayudar?")
     )
     mocker.patch(
-        "app.llm.client.AsyncAnthropic",
-        return_value=MagicMock(messages=MagicMock(create=mock_create)),
+        "app.llm.client.AsyncGroq",
+        return_value=MagicMock(
+            chat=MagicMock(completions=MagicMock(create=mock_create))
+        ),
     )
     return mock_create
 
 
 @pytest.fixture
-def llm_client(mock_anthropic):
+def llm_client(mock_groq):
     return LLMClient(api_key="test-key-fake")
 
 
@@ -47,23 +52,24 @@ def conversation(llm_client):
 # ── LLMClient tests ────────────────────────────────────────────────────────────
 
 
-async def test_complete_returns_text(llm_client, mock_anthropic):
+async def test_complete_returns_text(llm_client, mock_groq):
     result = await llm_client.complete([{"role": "user", "content": "Hola"}])
 
     assert isinstance(result, str)
     assert len(result) > 0
 
 
-async def test_complete_calls_api_with_messages(llm_client, mock_anthropic):
+async def test_complete_calls_api_with_messages(llm_client, mock_groq):
     messages = [{"role": "user", "content": "¿Cómo estás?"}]
     await llm_client.complete(messages)
 
-    mock_anthropic.assert_called_once()
-    call_kwargs = mock_anthropic.call_args.kwargs
-    assert call_kwargs["messages"] == messages
+    mock_groq.assert_called_once()
+    call_kwargs = mock_groq.call_args.kwargs
+    # System prompt is prepended, user message is last
+    assert call_kwargs["messages"][-1] == messages[0]
 
 
-async def test_complete_logs_latency(llm_client, mock_anthropic, mocker):
+async def test_complete_logs_latency(llm_client, mock_groq, mocker):
     mock_log = mocker.patch("app.llm.client.logger.info")
     await llm_client.complete([{"role": "user", "content": "test"}])
 

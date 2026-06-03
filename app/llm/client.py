@@ -2,12 +2,12 @@ import os
 import time
 
 import structlog
-from anthropic import AsyncAnthropic
+from groq import AsyncGroq
 
 logger = structlog.get_logger(__name__)
 
-_DEFAULT_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-3-5-haiku-20241022")
-_DEFAULT_MAX_TOKENS = int(os.getenv("ANTHROPIC_MAX_TOKENS", "256"))
+_DEFAULT_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+_DEFAULT_MAX_TOKENS = int(os.getenv("GROQ_MAX_TOKENS", "256"))
 
 SYSTEM_PROMPT = (
     "Eres un asistente de voz conversacional. "
@@ -26,30 +26,29 @@ class LLMClient:
     ) -> None:
         self.model = model
         self.max_tokens = max_tokens
-        self._client = AsyncAnthropic(
-            api_key=api_key or os.environ["ANTHROPIC_API_KEY"]
+        self._client = AsyncGroq(
+            api_key=api_key or os.environ["GROQ_API_KEY"]
         )
         logger.info("llm.client_ready", model=model, max_tokens=max_tokens)
 
     async def complete(self, messages: list[dict]) -> str:
         t0 = time.perf_counter()
 
-        response = await self._client.messages.create(
+        response = await self._client.chat.completions.create(
             model=self.model,
             max_tokens=self.max_tokens,
-            system=SYSTEM_PROMPT,
-            messages=messages,
+            messages=[{"role": "system", "content": SYSTEM_PROMPT}, *messages],
         )
 
         latency_ms = (time.perf_counter() - t0) * 1000
-        text = response.content[0].text
+        text = response.choices[0].message.content
 
         logger.info(
             "llm.completed",
             model=self.model,
             latency_ms=round(latency_ms, 1),
-            input_tokens=response.usage.input_tokens,
-            output_tokens=response.usage.output_tokens,
+            input_tokens=response.usage.prompt_tokens,
+            output_tokens=response.usage.completion_tokens,
             text_preview=text[:80],
         )
 
